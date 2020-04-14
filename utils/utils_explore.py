@@ -1,5 +1,6 @@
 ########################################################################################################################
 # File to collect methods to read dicom files
+# refactored to be part of DataStructureDicom wrapper for Dicom data
 ########################################################################################################################
 import pandas as pd
 import pydicom
@@ -7,7 +8,7 @@ import numpy as np
 import os
 # TODO: add logging to avoid general print commands
 
-author = "__c.magg__"
+__author__ = "c.magg"
 
 
 def read_structure(path_dicom_folder):
