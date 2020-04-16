@@ -137,69 +137,92 @@ class PatientData:
 
         self.contour_dict_points_layerwise = contours_dict_point_layerwise
 
-    def show_overlay_pre(self, ind, struct):
+    def show_overlay2D_pre(self, struct, ind):
         """
         Method to show the overlay of pre-treatment image and contour
-        :param ind: slice index
         :param struct: name of roi of interest
+        :param ind: slice index
         :return:
         """
         img_preop = self.get_pre_images(ind)
-        contour_img = self.create_contour_overlay(ind, struct)
+        contour_img = self.create_contour_overlay(struct, ind)
         overlay_pre = cv2.addWeighted(img_preop.astype(np.uint16), 1.0, contour_img, 0.8, 0)
+        plt.title('slice %d' % ind)
         plt.imshow(overlay_pre)
+        plt.axis('off')
         plt.show()
 
-    def show_overlay_post(self, ind, struct):
+    def show_overlay2D_post_init(self, struct, ind):
         """
         Method to show the overlay of post-treatment image and contour
-        :param ind: slice index
         :param struct: name of roi of interest
+        :param ind: slice index
         :return:
         """
         img_postop = self.get_post_images(ind)
-        contour_img = self.create_contour_overlay(ind, struct)
-        for img in img_postop:
-            overlay_post = cv2.addWeighted(img.astype(np.uint16), 1.0, contour_img, 0.8, 0)
-            plt.imshow(overlay_post)
-            plt.show()
+        contour_img = self.create_contour_overlay(struct, ind)
+        fig, ax = plt.subplots(1, len(img_postop), figsize=[12, 12])
+        for idx, img in enumerate(img_postop):
+            overlay_post = cv2.addWeighted(img.astype(np.uint16), 1.0, contour_img, 0.6, 0)
+            ax[idx].set_title('slice %d' % ind)
+            ax[idx].imshow(overlay_post)
+            ax[idx].axis('off')
+        plt.show()
 
-    def get_contour(self, ind, struct):
+    def get_contour(self, struct, ind=None):
         """
-        Method to get contour coordinates of given structure and slice
-        :param ind: slice index
+        Method to get contour coordinates of given structure and one or all slices
         :param struct: name of roi of interest
-        :return:
+        :param ind: slice index
+        :return: list of vertices per slice
         """
         if struct not in self.contour_dict_points_layerwise.keys():
             raise ValueError("ROIName was not filtered.")
-        loc = self.get_slice_location(ind)
-        vertices = np.array([x[:,0:2] for x in self.contour_dict_points_layerwise[struct] if x[0][2] == loc])
-        if len(vertices) != 0:
-            vertices = vertices[0].astype(np.int32)
+        if ind is None:
+            vertices = [x[:, 0:2].astype(np.int32) for x in self.contour_dict_points_layerwise[struct]]
+        else:
+            loc = self.get_slice_location(ind)
+            vertices = np.array(
+                [x[:, 0:2].astype(np.int32) for x in self.contour_dict_points_layerwise[struct] if x[0][2] == loc])[0]
         return vertices
 
-    def create_contour_overlay(self, ind, struct):
+    def create_contour_overlay(self, struct, ind=None):
         """
         Method to create the contour 2D mask of slice ind and given roi name
-        :param ind: slice index
         :param struct: name of roi of interest
+        :param ind: slice index
         :return:
         """
-        contour_img = np.zeros_like(self.get_pre_images(ind))
-        vertices = self.get_contour(ind, struct)
-        if len(vertices) != 0:
-            cv2.drawContours(contour_img, [vertices], -1, (255, 255, 255), -1)
+        if ind is None:
+            contour_img = [np.zeros_like(x) for x in self.get_pre_images()]
+            vertices = self.get_contour(struct)
+            last_loc = self.contour_dict_points_layerwise[struct][-1][0][2]
+            idx_last = np.where(self._preop_dicoms.get_slice_location() == last_loc)[0][0]
+            [cv2.drawContours(contour_img[idx + idx_last], [x], -1, (255,255,255), -1) for idx, x in
+             enumerate(reversed(vertices))]
         else:
-            print('No contour')
+            contour_img = np.zeros_like(self.get_pre_images(ind))
+            vertices = self.get_contour(struct, ind)
+            contour_img = cv2.drawContours(contour_img, [vertices], -1, (255,255,255), -1)
         return contour_img
 
-    def show_overlays(self, ind, struct):
+    def show_overlays_init(self, struct, ind):
         """
         Method to show overlays for pre- and post-treatment data
-        :param ind: slice index
         :param struct: name of roi of interest
+        :param ind: slice index
         :return:
         """
-        self.show_overlay_pre(ind, struct)
-        self.show_overlay_post(ind, struct)
+        self.show_overlay2D_pre(struct, ind)
+        self.show_overlay2D_post_init(struct, ind)
+
+    # adapted from https://www.raddq.com/dicom-processing-segmentation-visualization-in-python/
+    @staticmethod
+    def show_slices2D(stack, rows=6, cols=6, start_with=10, show_every=3):
+        fig, ax = plt.subplots(rows, cols, figsize=[12, 12])
+        for i in range(rows * cols):
+            ind = start_with + i * show_every
+            ax[int(i / rows), int(i % rows)].set_title('slice %d' % ind)
+            ax[int(i / rows), int(i % rows)].imshow(stack[ind], cmap='gray')
+            ax[int(i / rows), int(i % rows)].axis('off')
+        plt.show()

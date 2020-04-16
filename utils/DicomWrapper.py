@@ -42,7 +42,7 @@ class DicomWrapper:
             x = self._imgs[ind]
             return cv2.normalize(x, x, 0, 255, 32)
 
-    def get_slice_location(self, ind):
+    def get_slice_location(self, ind=None):
         if self._slice_location is not None:
             if ind is None:
                 return self._slice_location
