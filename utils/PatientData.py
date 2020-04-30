@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import cv2
 import os.path
 import sys
+import logging as log
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from utils.DicomWrapper import DicomWrapper
@@ -45,11 +46,11 @@ class PatientData:
         pre-treatment dicom is used as reference for all the other dicom files (correction factors)
         :return:
         """
-        print("\nPreop dicom")
+        log.info("\nPreop dicom")
         self._preop_dicoms = DicomWrapper(self._preop_dicom_path, True, True)
         self._correction = self._preop_dicoms.get_correction()
         for postop_path in self._postop_dicom_path:
-            print("\nPostop", postop_path)
+            log.info("\nPostop %s", postop_path)
             self._postop_dicoms.append(DicomWrapper(postop_path, True, True))
 
     def _read_dicom_contour(self):
@@ -73,6 +74,7 @@ class PatientData:
         Method to read contour information of dicom contour file and extract ROINumber and ROIName
         :return:
         """
+        log.info("\nStart reading contour list")
         if len(self.contour_list_names) != 0:
             raise Warning("Contour list is already initialized and will not be initialized again.")
         for i in range(self._contour_dcm.StructureSetROISequence.__len__()):
@@ -117,7 +119,7 @@ class PatientData:
                         or exact - names must exactly match
         :return:
         """
-
+        log.info("Start filtering contour list for RoiNames %s with mode %s", roiname, mode)
         if type(roiname) == str:
             roiname = [roiname]
         if roiname is not None:
@@ -135,7 +137,7 @@ class PatientData:
         if len(self.contour_list_names_filtered) != 0:
             self.contour_list_names_filtered = self.contour_list_names_filtered.drop_duplicates()
 
-    def get_filtered_contour_list_names(self):
+    def get_filtered_contour_names(self):
         """
         Getter for filtered contour list names
         :return: list of contour names filtered/read
@@ -146,7 +148,7 @@ class PatientData:
         else:
             return self.contour_list_names_filtered['RoiName']
 
-    def get_all_contour_list_names(self):
+    def get_all_contour_names(self):
         """
         Getter for all contour list names
         :return: list of all contour names alphabetically sorted
@@ -176,6 +178,7 @@ class PatientData:
             contour_points_layerwise = []
             i = x['ID']
             name = x['RoiName']
+            log.info("Reading contour information of RoiName %s", name)
             for j in range(self._contour_dcm.ROIContourSequence.__getitem__(i).ContourSequence.__len__()):
                 contour = np.array(
                     self._contour_dcm.ROIContourSequence.__getitem__(i).ContourSequence.__getitem__(j).ContourData)
@@ -190,11 +193,19 @@ class PatientData:
                  int(np.round(self._preop_dicoms.get_pixel_spacing()[1] * x[1]))) for
                 x in ct_shape]
             contour_img = [np.zeros(x, dtype=np.uint16) for x in contour_shape]
-            last_loc = contour_points_layerwise[-1][0][2]
-            idx_last = np.where(self._preop_dicoms.get_slice_location() == last_loc)[0][0]
-            vertices = [x[:, 0:2].astype(np.int32) for x in contour_points_layerwise]
-            [cv2.drawContours(contour_img[idx + idx_last], [x], -1, (255, 255, 255), -1) for idx, x in
-             enumerate(reversed(vertices))]
+
+            for ind, vert in enumerate(contour_points_layerwise):
+                s = vert[0][-1]
+                ind2 = np.where(self._preop_dicoms.get_slice_location() == s)[0][0]
+                cv2.drawContours(contour_img[ind2], [vert[:, 0:2].astype(np.int32)], -1, (255, 255, 255), -1)
+                #contour_img_res = cv2.resize(contour_img[ind2], dsize=ct_shape[slice_index], interpolation=cv2.INTER_NEAREST)
+
+            # last_loc = contour_points_layerwise[-1][0][2]
+            # idx_last = np.where(self._preop_dicoms.get_slice_location() == last_loc)[0][0]
+            # vertices = [x[:, 0:2].astype(np.int32) for x in contour_points_layerwise]
+            # # TODO: not so easy? not every entry correspond to one slice
+            # [cv2.drawContours(contour_img[ind + idx_last], [vert], -1, (255, 255, 255), -1) for ind, vert in
+            #  enumerate(reversed(vertices))]
             contour_img_res = [cv2.resize(x, dsize=ct_shape[slice_index], interpolation=cv2.INTER_NEAREST) for
                                slice_index, x in
                                enumerate(contour_img)]
@@ -256,7 +267,8 @@ class PatientData:
         overlay_pre = cv2.addWeighted(img_preop, 1.0, contour_img, 0.8, 0)
         fig, ax = plt.subplots(figsize=(7, 7))
         ax.imshow(overlay_pre)
-        ax.plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
+        if pts_init is not None:
+            ax.plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
         ax.set_title('slice %d' % slice_index)
         ax.axis('off')
         plt.show()
@@ -276,7 +288,8 @@ class PatientData:
             overlay_post = cv2.addWeighted(img.astype(np.uint16), 1.0, contour_img, 0.6, 0)
             ax[idx].set_title('slice %d' % slice_index)
             ax[idx].imshow(overlay_post)
-            ax[idx].plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
+            if pts_init is not None:
+                ax[idx].plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
             ax[idx].axis('off')
         plt.show()
 
