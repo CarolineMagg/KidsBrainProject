@@ -6,6 +6,7 @@ import pydicom
 import cv2
 import numpy as np
 from natsort import natsorted
+import logging as log
 
 __author__ = "c.magg"
 
@@ -118,9 +119,10 @@ class DicomWrapper:
             raise ValueError("Reference frame information could not be processed.")
 
         if self._debug:
-            print("Image size.......:", self._dimensions)
-            print("Pixel spacing....:", self._pixel_spacing)
-            print("Slices number....:", len(self._slice_location))
-            print("Slices location...:", self._slice_location[0], " - ", self._slice_location[-1])
-            print("Position.........:", self._position)
-            print("Resulting correction:", self._correction)
+            log.info("Debug on")
+            log.info("Image size.......: %s", self._dimensions)
+            log.info("Pixel spacing....: %s", self._pixel_spacing)
+            log.info("Slices number....: %s", len(self._slice_location))
+            log.info("Slices location...: %s - %s", self._slice_location[0], self._slice_location[-1])
+            log.info("Position.........: %s", self._position)
+            log.info("Resulting correction: %s", self._correction)
