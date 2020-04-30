@@ -34,8 +34,7 @@ class PatientData:
         self._postop_dicoms = []
         self._contour_dcm = None
         self.contour_list_names = pd.DataFrame(columns=['ID', 'RoiNumber', 'RoiName'])
-        self.contour_list_names_filtered = pd.DataFrame(columns=['ID', 'RoiNumber', 'RoiName'])
-        self.contour_dict_points_layerwise = {}
+        self.contour_list_names_filtered = pd.DataFrame(columns=['ID', 'RoiNumber', 'RoiName', 'original', 'mapped'])
         self._read_dicom()
         self._read_dicom_contour()
         self._read_contour_list()
@@ -143,16 +142,18 @@ class PatientData:
         :param roinumber: list of ROINumbers to filter
         :param mode: either approx (default) - given roiname is part of ROIName
                         or exact - names must exactly match
-        :return: subset of pandas dataframe with unique requested ROI
+        :return: subset of pandas dataframe with unique requested ROI, original and mapped contour points
         """
 
         self._filter_contour_list(roiname=roiname, roinumber=roinumber, mode=mode)
+        self.contour_list_names_filtered['original'] = None
+        self.contour_list_names_filtered['mapped'] = None
+        self.contour_list_names_filtered['mask'] = None
 
         if len(self.contour_list_names_filtered) == 0:
             raise ValueError(
                 "List of contours of interest is empty. Please set either roiname or roinumber.")
 
-        contours_dict_point_layerwise = {x: [] for x in self.contour_list_names_filtered['RoiName']}
         for idx, x in self.contour_list_names_filtered.iterrows():
             contour_points_layerwise = []
             i = x['ID']
@@ -163,9 +164,34 @@ class PatientData:
                 contour = contour.reshape(int(contour.size / 3.),
                                           3) + self._correction  # correction to get positive values
                 contour_points_layerwise.append(contour)
-            contours_dict_point_layerwise[name] = contour_points_layerwise
-        self.contour_dict_points_layerwise = contours_dict_point_layerwise
-        return self.contour_list_names_filtered
+            self.contour_list_names_filtered.at[idx, 'original'] = contour_points_layerwise
+
+            ct_shape = [x.shape for x in self.get_pre_images()]
+            contour_shape = [
+                (int(np.round(self._preop_dicoms.get_pixel_spacing()[0] * x[0])),
+                 int(np.round(self._preop_dicoms.get_pixel_spacing()[1] * x[1]))) for
+                x in ct_shape]
+            contour_img = [np.zeros(x, dtype=np.uint16) for x in contour_shape]
+            last_loc = contour_points_layerwise[-1][0][2]
+            idx_last = np.where(self._preop_dicoms.get_slice_location() == last_loc)[0][0]
+            vertices = [x[:, 0:2].astype(np.int32) for x in contour_points_layerwise]
+            [cv2.drawContours(contour_img[idx + idx_last], [x], -1, (255, 255, 255), -1) for idx, x in
+             enumerate(reversed(vertices))]
+            contour_img_res = [cv2.resize(x, dsize=ct_shape[slice_index], interpolation=cv2.INTER_NEAREST) for
+                               slice_index, x in
+                               enumerate(contour_img)]
+            self.contour_list_names_filtered.at[idx, 'mask'] = contour_img_res
+
+            mapped_pts_layerwise = []
+            for img_res in contour_img_res:
+                tmp = cv2.findContours(img_res.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[1]
+                if len(tmp) != 0:
+                    tmp = tmp[0]
+                    tmp = tmp.reshape(tmp.shape[0], tmp.shape[2])
+                    mapped_pts_layerwise.append(tmp)
+                else:
+                    mapped_pts_layerwise.append(None)
+            self.contour_list_names_filtered.at[idx, 'mapped'] = mapped_pts_layerwise
 
     def get_contour_points(self, struct, slice_index=None):
         """
@@ -174,38 +200,30 @@ class PatientData:
         :param slice_index: index of slice(s), if None entire volume
         :return: list of vertices per slice
         """
-        if struct not in self.contour_dict_points_layerwise.keys():
-            raise ValueError("ROIName was not filtered.")
+        df = self.contour_list_names_filtered
+        struct_ind = df[df['RoiName'] == struct].index.values
+        if len(struct_ind) != 1:
+            raise ValueError("RoiName was not filtered.")
         if slice_index is None:
-            vertices = [x[:, 0:2].astype(np.int32) for x in self.contour_dict_points_layerwise[struct]]
+            return self.contour_list_names_filtered.loc[struct_ind[0], 'mapped']
         else:
-            loc = self.get_slice_location(slice_index)
-            vertices = [x[:, 0:2].astype(np.int32) for x in self.contour_dict_points_layerwise[struct] if x[0][2] == loc]
-        return vertices
+            return [self.contour_list_names_filtered.loc[struct_ind[0], 'mapped'][slice_index]]
 
-    def create_contour_overlay(self, struct, slice_index=None):
+    def get_contour_overlay(self, struct, slice_index=None):
         """
-        Method to create the contour 2D mask of slice index and given roi name
+        Method to get the contour 2D mask of slice index and given roi name
         :param struct: name of roi of interest
         :param slice_index: index of slice(s), if None entire volume
-        :return: contour 2D mask as np.uint16 array with 0 - background, 255 - mask
+        :return: list of contour 2D masks as np.uint16 array with 0 - background, 255 - mask per slice
         """
-        ct_shape = [x.shape for x in self.get_pre_images(slice_index)]
-        contour_shape = [
-            (int(np.round(self._preop_dicoms.get_pixel_spacing()[0] * x[0])),
-             int(np.round(self._preop_dicoms.get_pixel_spacing()[1] * x[1]))) for
-            x in ct_shape]
-        contour_img = [np.zeros(x, dtype=np.uint16) for x in contour_shape]
-        vertices = self.get_contour_points(struct, slice_index)
-        idx_last = 0
+        df = self.contour_list_names_filtered
+        struct_ind = df[df['RoiName'] == struct].index.values
+        if len(struct_ind) != 1:
+            raise ValueError("RoiName was not filtered.")
         if slice_index is None:
-            last_loc = self.contour_dict_points_layerwise[struct][-1][0][2]
-            idx_last = np.where(self._preop_dicoms.get_slice_location() == last_loc)[0][0]
-        [cv2.drawContours(contour_img[idx + idx_last], [x], -1, (255, 255, 255), -1) for idx, x in
-         enumerate(reversed(vertices))]
-        contour_img_res = [cv2.resize(x, dsize=ct_shape[slice_index], interpolation=cv2.INTER_NEAREST) for slice_index, x in
-                           enumerate(contour_img)]
-        return contour_img_res
+            return self.contour_list_names_filtered.loc[struct_ind[0], 'mask']
+        else:
+            return [self.contour_list_names_filtered.loc[struct_ind[0], 'mask'][slice_index]]
 
     def show_overlay2D_pre(self, struct, slice_index):
         """
@@ -215,11 +233,14 @@ class PatientData:
         :return:
         """
         img_preop = self.get_pre_images(slice_index)[0]
-        contour_img = self.create_contour_overlay(struct, slice_index)[0]
+        contour_img = self.get_contour_overlay(struct, slice_index)[0]
+        pts_init = self.get_contour_points(struct, slice_index)[0]
         overlay_pre = cv2.addWeighted(img_preop, 1.0, contour_img, 0.8, 0)
-        plt.title('slice %d' % slice_index)
-        plt.imshow(overlay_pre)
-        plt.axis('off')
+        fig, ax = plt.subplots(figsize=(7, 7))
+        ax.imshow(overlay_pre)
+        ax.plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
+        ax.set_title('slice %d' % slice_index)
+        ax.axis('off')
         plt.show()
 
     def show_overlay2D_post_init(self, struct, slice_index):
@@ -230,12 +251,14 @@ class PatientData:
         :return:
         """
         img_postop = self.get_post_images(slice_index)
-        contour_img = self.create_contour_overlay(struct, slice_index)[0]
-        fig, ax = plt.subplots(1, len(img_postop), figsize=[12, 12])
+        contour_img = self.get_contour_overlay(struct, slice_index)[0]
+        pts_init = self.get_contour_points(struct, slice_index)[0]
+        fig, ax = plt.subplots(1, len(img_postop), figsize=[21, 21])
         for idx, img in enumerate(img_postop):
             overlay_post = cv2.addWeighted(img.astype(np.uint16), 1.0, contour_img, 0.6, 0)
             ax[idx].set_title('slice %d' % slice_index)
             ax[idx].imshow(overlay_post)
+            ax[idx].plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
             ax[idx].axis('off')
         plt.show()
 
@@ -280,6 +303,6 @@ class PatientData:
         :return:
         """
         img = self.get_pre_images()
-        contour_init = self.create_contour_overlay(struct)
+        contour_init = self.get_contour_overlay(struct)
         toshow = [cv2.addWeighted(img[idx], 1.0, x, 0.6, 0) for idx, x in enumerate(contour_init)]
         self.show_slices2D(toshow, rows, cols, start_with, show_every)
