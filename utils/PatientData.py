@@ -135,6 +135,24 @@ class PatientData:
         if len(self.contour_list_names_filtered) != 0:
             self.contour_list_names_filtered = self.contour_list_names_filtered.drop_duplicates()
 
+    def get_filtered_contour_list_names(self):
+        """
+        Getter for filtered contour list names
+        :return: list of contour names filtered/read
+        """
+        if len(self.contour_list_names_filtered) == 0:
+            raise ValueError(
+                "List of contours of interest is empty.")
+        else:
+            return self.contour_list_names_filtered['RoiName']
+
+    def get_all_contour_list_names(self):
+        """
+        Getter for all contour list names
+        :return: list of all contour names alphabetically sorted
+        """
+        return np.sort(self.contour_list_names['RoiName'].values)
+
     def read_filtered_contour(self, roiname=None, roinumber=None, mode="approx"):
         """
         Method to read the contour information of roi names/numbers of interest
