@@ -169,6 +169,7 @@ class PatientData:
         self.contour_list_names_filtered['original'] = None
         self.contour_list_names_filtered['mapped'] = None
         self.contour_list_names_filtered['mask'] = None
+        self.contour_list_names_filtered['first'] = None
 
         if len(self.contour_list_names_filtered) == 0:
             raise ValueError(
@@ -194,22 +195,19 @@ class PatientData:
                 x in ct_shape]
             contour_img = [np.zeros(x, dtype=np.uint16) for x in contour_shape]
 
+            first = len(self.get_pre_images())
             for ind, vert in enumerate(contour_points_layerwise):
                 s = vert[0][-1]
                 ind2 = np.where(self._preop_dicoms.get_slice_location() == s)[0][0]
+                if ind2 < first:
+                    first = ind2
                 cv2.drawContours(contour_img[ind2], [vert[:, 0:2].astype(np.int32)], -1, (255, 255, 255), -1)
-                #contour_img_res = cv2.resize(contour_img[ind2], dsize=ct_shape[slice_index], interpolation=cv2.INTER_NEAREST)
 
-            # last_loc = contour_points_layerwise[-1][0][2]
-            # idx_last = np.where(self._preop_dicoms.get_slice_location() == last_loc)[0][0]
-            # vertices = [x[:, 0:2].astype(np.int32) for x in contour_points_layerwise]
-            # # TODO: not so easy? not every entry correspond to one slice
-            # [cv2.drawContours(contour_img[ind + idx_last], [vert], -1, (255, 255, 255), -1) for ind, vert in
-            #  enumerate(reversed(vertices))]
             contour_img_res = [cv2.resize(x, dsize=ct_shape[slice_index], interpolation=cv2.INTER_NEAREST) for
                                slice_index, x in
                                enumerate(contour_img)]
             self.contour_list_names_filtered.at[idx, 'mask'] = contour_img_res
+            self.contour_list_names_filtered.at[idx, 'first'] = first
 
             mapped_pts_layerwise = []
             for img_res in contour_img_res:
@@ -269,6 +267,7 @@ class PatientData:
         ax.imshow(overlay_pre)
         if pts_init is not None:
             ax.plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
+        # TODO: add legends to plots
         ax.set_title('Pre-treatment slice %d' % slice_index)
         ax.axis('off')
         plt.show()
@@ -318,9 +317,13 @@ class PatientData:
         fig, ax = plt.subplots(rows, cols, figsize=[12, 12])
         for i in range(rows * cols):
             slice_index = start_with + i * show_every
-            ax[int(i / rows), int(i % rows)].set_title('slice %d' % slice_index)
-            ax[int(i / rows), int(i % rows)].imshow(stack[slice_index], cmap='gray')
-            ax[int(i / rows), int(i % rows)].axis('off')
+            if slice_index >= len(stack):
+                ax[int(i / cols), int(i % cols)].set_title('No slice')
+                ax[int(i / cols), int(i % cols)].imshow(np.zeros_like(stack[-1]), cmap='gray')
+            else:
+                ax[int(i / cols), int(i % cols)].set_title('slice %d' % slice_index)
+                ax[int(i / cols), int(i % cols)].imshow(stack[slice_index], cmap='gray')
+            ax[int(i / cols), int(i % cols)].axis('off')
         plt.show()
 
     def show_slices2D_contour(self, struct, rows=6, cols=6, start_with=10, show_every=3):
