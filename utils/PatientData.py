@@ -180,6 +180,7 @@ class PatientData:
             i = x['ID']
             name = x['RoiName']
             log.info("Reading contour information of RoiName %s", name)
+            # read original contour coordinates
             for j in range(self._contour_dcm.ROIContourSequence.__getitem__(i).ContourSequence.__len__()):
                 contour = np.array(
                     self._contour_dcm.ROIContourSequence.__getitem__(i).ContourSequence.__getitem__(j).ContourData)
@@ -188,6 +189,7 @@ class PatientData:
                 contour_points_layerwise.append(contour)
             self.contour_list_names_filtered.at[idx, 'original'] = contour_points_layerwise
 
+            # convert contour coordinates to contour
             ct_shape = [x.shape for x in self.get_pre_images()]
             contour_shape = [
                 (int(np.round(self._preop_dicoms.get_pixel_spacing()[0] * x[0])),
@@ -203,19 +205,22 @@ class PatientData:
                     first = ind2
                 cv2.drawContours(contour_img[ind2], [vert[:, 0:2].astype(np.int32)], -1, (255, 255, 255), -1)
 
+            # scale contour images to size of pre-treatment images
             contour_img_res = [cv2.resize(x, dsize=ct_shape[slice_index], interpolation=cv2.INTER_NEAREST) for
                                slice_index, x in
                                enumerate(contour_img)]
             self.contour_list_names_filtered.at[idx, 'mask'] = contour_img_res
             self.contour_list_names_filtered.at[idx, 'first'] = first
 
+            # convert contour to coordinates
             mapped_pts_layerwise = []
             for img_res in contour_img_res:
                 tmp = cv2.findContours(img_res.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[1]
                 if len(tmp) != 0:
-                    tmp = tmp[0]
-                    tmp = tmp.reshape(tmp.shape[0], tmp.shape[2])
-                    mapped_pts_layerwise.append(tmp)
+                    tmp2 = []
+                    for t in tmp:
+                        tmp2.append(t.reshape(t.shape[0], t.shape[2]))
+                    mapped_pts_layerwise.append(tmp2)
                 else:
                     mapped_pts_layerwise.append(None)
             self.contour_list_names_filtered.at[idx, 'mapped'] = mapped_pts_layerwise
@@ -266,7 +271,8 @@ class PatientData:
         fig, ax = plt.subplots(figsize=(7, 7))
         ax.imshow(overlay_pre)
         if pts_init is not None:
-            ax.plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
+            for pts in pts_init:
+                ax.plot(pts[:, 0], pts[:, 1], '--r', lw=3)
         # TODO: add legends to plots
         ax.set_title('Pre-treatment slice %d' % slice_index)
         ax.axis('off')
@@ -288,7 +294,8 @@ class PatientData:
             ax[idx].set_title('Post-treatment slice %d' % slice_index)
             ax[idx].imshow(overlay_post)
             if pts_init is not None:
-                ax[idx].plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
+                for pts in pts_init:
+                    ax[idx].plot(pts[:, 0], pts[:, 1], '--r', lw=3)
             ax[idx].axis('off')
         plt.show()
 
