@@ -269,7 +269,7 @@ class PatientData:
         ax.imshow(overlay_pre)
         if pts_init is not None:
             ax.plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
-        ax.set_title('slice %d' % slice_index)
+        ax.set_title('Pre-treatment slice %d' % slice_index)
         ax.axis('off')
         plt.show()
 
@@ -286,7 +286,7 @@ class PatientData:
         fig, ax = plt.subplots(1, len(img_postop), figsize=[21, 21])
         for idx, img in enumerate(img_postop):
             overlay_post = cv2.addWeighted(img.astype(np.uint16), 1.0, contour_img, 0.6, 0)
-            ax[idx].set_title('slice %d' % slice_index)
+            ax[idx].set_title('Post-treatment slice %d' % slice_index)
             ax[idx].imshow(overlay_post)
             if pts_init is not None:
                 ax[idx].plot(pts_init[:, 0], pts_init[:, 1], '--r', lw=3)
