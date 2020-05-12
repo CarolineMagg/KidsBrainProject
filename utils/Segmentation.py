@@ -16,7 +16,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 __author__ = "c.magg"
 
 
-class Segmentation():
+class Segmentation:
+    # TODO: add method descriptions
 
     def __init__(self, patientData, debug=False):
         """
@@ -52,14 +53,21 @@ class Segmentation():
         return pts
 
     def _select_data(self, struct, postprocess=0, first=0, last=None):
-        self._stack_img = self.patient.get_post_images()[postprocess][first:last]
+        if postprocess == -1:
+            self._stack_img = self.patient.get_pre_images()[first:last]
+        else:
+            self._stack_img = self.patient.get_post_images()[postprocess][first:last]
         self._stack_contour_init = self.patient.get_contour_overlay(struct)[first:last]
         self._stack_pts_init = self.patient.get_contour_points(struct)[first:last]
         self._tmp_struct = struct
         self._tmp_first = first
 
     def active_contour(self, struct, postprocess=0, first=0, last=None,
-                       kernel=(10, 10), w_edge=150, beta=2,
+                       kernel=(10, 10),
+                       w_line=0, w_edge=1,
+                       alpha=0.1, beta=0.1, gamma=0.01,
+                       max_px_move=1.0, max_iterations=2500, convergence=0.1,
+                       boundary_condition='periodic',
                        debug=False):
         self._reset_stack_tmp()
         if last is None:
@@ -78,7 +86,10 @@ class Segmentation():
                 contour_proc = []
                 pts_proc = []
                 for pts_dilate in pts_dilated:
-                    pts = segmentation.active_contour(image, pts_dilate, w_edge=w_edge, beta=beta)
+                    pts = segmentation.active_contour(image, pts_dilate, alpha=alpha, beta=beta, gamma=gamma,
+                                                      w_line=w_line, w_edge=w_edge,
+                                                      max_px_move=max_px_move, max_iterations=max_iterations,
+                                                      convergence=convergence, boundary_condition=boundary_condition)
                     contour_proc.append(Segmentation.pts_to_contour(pts, image.shape))
                     pts_proc.append(pts)
                 self._stack_pts_segm.append(pts_proc)
