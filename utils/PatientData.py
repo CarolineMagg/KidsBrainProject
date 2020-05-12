@@ -170,6 +170,7 @@ class PatientData:
         self.contour_list_names_filtered['mapped'] = None
         self.contour_list_names_filtered['mask'] = None
         self.contour_list_names_filtered['first'] = None
+        self.contour_list_names_filtered['last'] = None
 
         if len(self.contour_list_names_filtered) == 0:
             raise ValueError(
@@ -198,11 +199,14 @@ class PatientData:
             contour_img = [np.zeros(x, dtype=np.uint16) for x in contour_shape]
 
             first = len(self.get_pre_images())
+            last = 0
             for ind, vert in enumerate(contour_points_layerwise):
                 s = vert[0][-1]
                 ind2 = np.where(self._preop_dicoms.get_slice_location() == s)[0][0]
                 if ind2 < first:
                     first = ind2
+                if ind2 > last:
+                    last = ind2
                 cv2.drawContours(contour_img[ind2], [vert[:, 0:2].astype(np.int32)], -1, (255, 255, 255), -1)
 
             # scale contour images to size of pre-treatment images
@@ -211,6 +215,7 @@ class PatientData:
                                enumerate(contour_img)]
             self.contour_list_names_filtered.at[idx, 'mask'] = contour_img_res
             self.contour_list_names_filtered.at[idx, 'first'] = first
+            self.contour_list_names_filtered.at[idx, 'last'] = last
 
             # convert contour to coordinates
             mapped_pts_layerwise = []
