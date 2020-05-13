@@ -10,6 +10,7 @@ import sys
 import logging as log
 import time
 import skimage.segmentation as segmentation
+from scipy.spatial.distance import cdist
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -59,6 +60,7 @@ class Segmentation:
             self._stack_img = self.patient.get_post_images()[postprocess][first:last]
         self._stack_contour_init = self.patient.get_contour_overlay(struct)[first:last]
         self._stack_pts_init = self.patient.get_contour_points(struct)[first:last]
+        self._stack_contour_pred = []
         self._tmp_struct = struct
         self._tmp_first = first
 
@@ -74,7 +76,6 @@ class Segmentation:
             last = first + 1
         log.info(' Select data.')
         self._select_data(struct, postprocess, first, last)
-        stack_contour_segm = []
         log.info(' Start segmentation of %s.' % struct)
         for idx, image in enumerate(self._stack_img):
             t = time.time()
@@ -92,15 +93,52 @@ class Segmentation:
                                                       convergence=convergence, boundary_condition=boundary_condition)
                     contour_proc.append(Segmentation.pts_to_contour(pts, image.shape))
                     pts_proc.append(pts)
+                contour_merged = np.zeros_like(image)
+                for contour in contour_proc:
+                    contour_merged[contour == 255] = 1
                 self._stack_pts_segm.append(pts_proc)
-                stack_contour_segm.append(contour_proc)
+                self._stack_contour_pred.append(contour_merged)
             else:
-                stack_contour_segm.append(contour_init)
+                self._stack_contour_pred.append(contour_init)
                 self._stack_pts_dilated.append(pts_init)
                 self._stack_pts_segm.append(pts_init)
             elapsed = time.time() - t
             log.info(' ... slice: %s, time: %s', first + idx, elapsed)
-        return stack_contour_segm
+        return self._stack_contour_pred
+
+    @staticmethod
+    def dice_coefficient(gt, pred, k=1):
+        return np.sum(pred[gt == k]) * 2.0 / (np.sum(pred) + np.sum(gt))
+
+    @staticmethod
+    def volumetric_overlap_error(gt, pred, k=1):
+        return 1 - np.sum(pred[gt == k]) * 2.0 / (np.sum(pred + gt))
+
+    @staticmethod
+    def mod_hausdorff_distance(gt, pred):
+        distance = cdist(gt, pred, 'euclidean')
+        dist1 = np.mean(np.min(distance, axis=0))
+        dist2 = np.mean(np.min(distance, axis=1))
+        return max(dist1, dist2)
+
+    def evaluate_segmentation(self):
+        log.info('Start evaluation ...')
+        assert (len(self._stack_contour_init) == len(self._stack_contour_pred),
+                "Initial segmentation has not the same length as the predicted segmentation.")
+        dice = []
+        hausdorff = []
+        vol_overlap = []
+        index = self._tmp_first
+        for gt, pred in zip(self._stack_contour_init, self._stack_contour_pred):
+            dice.append(self.dice_coefficient(gt, pred, 255))
+            hausdorff.append(self.mod_hausdorff_distance(gt, pred))
+            vol_overlap.append(self.volumetric_overlap_error(gt, pred, 255))
+            log.info("... Segmentation error metrics for slice %s \n"
+                     "    Dice coefficient: %s \n"
+                     "    Volumetric overlap error: %s \n"
+                     "    Mod hausdorff distance: %s", index, dice[-1], vol_overlap[-1], hausdorff[-1])
+            index += 1
+        return dice, vol_overlap, hausdorff
 
     @staticmethod
     def dilate_segmentation(contour_mask_init, kernel_size=(10, 10), iteration=1, debug=False):
