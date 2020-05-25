@@ -93,8 +93,7 @@ class Segmentation:
                        w_line=0, w_edge=1,
                        alpha=0.1, beta=0.1, gamma=0.01,
                        max_px_move=1.0, max_iterations=2500, convergence=0.1,
-                       boundary_condition='periodic',
-                       debug=False):
+                       boundary_condition='periodic'):
         """
         Method to wrap active contour segmentation algorithm
         :param struct: name of structure in question
@@ -111,13 +110,12 @@ class Segmentation:
         :param max_iterations: maximum iterations to optimize snake shape
         :param convergence: convergence criteria
         :param boundary_condition: boundary conditions for the contour
-        :param debug:
         :return:
         """
         self._reset_stack_tmp()
         if last is None:
             last = first + 1
-        log.info(' Select data.')
+        log.debug(' Select data.')
         self._select_data(struct, postprocess, first, last)
         log.info(' Start segmentation of %s.' % struct)
         for idx, image in enumerate(self._stack_img):
@@ -125,7 +123,7 @@ class Segmentation:
             contour_init = self._stack_contour_init[idx]
             pts_init = self._stack_pts_init[idx]
             if pts_init is not None:
-                pts_dilated = Segmentation.dilate_segmentation(contour_init, kernel_size=kernel, debug=debug)
+                pts_dilated = Segmentation.dilate_segmentation(contour_init, kernel_size=kernel)
                 self._stack_pts_dilated.append(pts_dilated)
                 contour_proc = []
                 pts_proc = []
@@ -146,7 +144,7 @@ class Segmentation:
                 self._stack_pts_dilated.append(pts_init)
                 self._stack_pts_segm.append(pts_init)
             elapsed = time.time() - t
-            log.info(' ... slice: %s, time: %s', first + idx, elapsed)
+            log.debug(' ... slice: %s, time: %s', first + idx, elapsed)
         return self._stack_contour_pred
 
     @staticmethod
@@ -184,12 +182,12 @@ class Segmentation:
         dist2 = np.mean(np.min(distance, axis=1))
         return max(dist1, dist2)
 
-    def evaluate_segmentation(self, k = 255):
+    def evaluate_segmentation(self, k=255):
         """
         Method to evaluate the stack segmentation
         :return: dice coefficient, volumetric overlap error, modified hausdorff distance
         """
-        log.info('Start evaluation ...')
+        log.info(' Start evaluation')
         assert (len(self._stack_contour_init) == len(self._stack_contour_pred),
                 "Initial segmentation has not the same length as the predicted segmentation.")
         dice = []
@@ -200,21 +198,20 @@ class Segmentation:
             dice.append(self.dice_coefficient(gt, pred, k))
             hausdorff.append(self.mod_hausdorff_distance(gt, pred))
             vol_overlap.append(self.volumetric_overlap_error(gt, pred, k))
-            log.info("... Segmentation error metrics for slice %s \n"
-                     "    Dice coefficient: %s \n"
-                     "    Volumetric overlap error: %s \n"
-                     "    Mod hausdorff distance: %s", index, dice[-1], vol_overlap[-1], hausdorff[-1])
+            log.debug("... Segmentation error metrics for slice %s \n"
+                      "    Dice coefficient: %s \n"
+                      "    Volumetric overlap error: %s \n"
+                      "    Mod hausdorff distance: %s", index, dice[-1], vol_overlap[-1], hausdorff[-1])
             index += 1
         return dice, vol_overlap, hausdorff
 
     @staticmethod
-    def dilate_segmentation(contour_mask_init, kernel_size=(10, 10), iteration=1, debug=False):
+    def dilate_segmentation(contour_mask_init, kernel_size=(10, 10), iteration=1):
         """
         Method to build dilated version of input segmentation mask
         :param contour_mask_init: initial segmentation mask
         :param kernel_size: kernel size for dilation
         :param iteration: number of iterations
-        :param debug:
         :return: dilated point data
         """
         kernel = np.ones(kernel_size, np.uint8)

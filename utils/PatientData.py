@@ -13,6 +13,7 @@ import logging as log
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from utils.DicomWrapper import DicomWrapper
 
+
 __author__ = "c.magg"
 
 
@@ -46,11 +47,11 @@ class PatientData:
         pre-treatment dicom is used as reference for all the other dicom files (correction factors)
         :return:
         """
-        log.info("\nPreop dicom")
+        log.info(" Preop dicom")
         self._preop_dicoms = DicomWrapper(self._preop_dicom_path, True, True)
         self._correction = self._preop_dicoms.get_correction()
         for postop_path in self._postop_dicom_path:
-            log.info("\nPostop %s", postop_path)
+            log.info(" Postop %s", postop_path)
             self._postop_dicoms.append(DicomWrapper(postop_path, True, True))
 
     def _read_dicom_contour(self):
@@ -74,7 +75,7 @@ class PatientData:
         Method to read contour information of dicom contour file and extract ROINumber and ROIName
         :return:
         """
-        log.info("\nStart reading contour list")
+        log.info(" Start reading contour list")
         if len(self.contour_list_names) != 0:
             raise Warning("Contour list is already initialized and will not be initialized again.")
         for i in range(self._contour_dcm.StructureSetROISequence.__len__()):
@@ -119,7 +120,7 @@ class PatientData:
                         or exact - names must exactly match
         :return:
         """
-        log.info("Start filtering contour list for RoiNames %s with mode %s", roiname, mode)
+        log.info(" Start filtering contour list for RoiNames %s with mode %s", roiname, mode)
         if type(roiname) == str:
             roiname = [roiname]
         if roiname is not None:
@@ -180,7 +181,7 @@ class PatientData:
             contour_points_layerwise = []
             i = x['ID']
             name = x['RoiName']
-            log.info("Reading contour information of RoiName %s", name)
+            log.debug(" Reading contour information of RoiName %s", name)
             # read original contour coordinates
             for j in range(self._contour_dcm.ROIContourSequence.__getitem__(i).ContourSequence.__len__()):
                 contour = np.array(
