@@ -19,7 +19,6 @@ class HyperparameterSearchSegmentation:
         self.segm = segmentor
         self.result = pd.DataFrame(columns=['Struct', 'Values', 'Dice'])
         if struct is None or first is None or last is None:
-            # TODO: add error handling
             self.found_struct = self.segm.patient.get_filtered_contour_names().values
             self.index_first = self.segm.patient.contour_list_names_filtered['first'].values
             self.index_last = self.segm.patient.contour_list_names_filtered['last'].values

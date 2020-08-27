@@ -42,7 +42,7 @@ class Segmentation:
         self._stack_pts_segm = []
 
     @staticmethod
-    def pts_to_contour(pts, contour_shape, value=(255, 0, 0)):
+    def pts_to_contour(pts, contour_shape, value=(1, 0, 0)):
         """
         Method to convert point data to mask data
         :param pts: point data
@@ -136,7 +136,7 @@ class Segmentation:
                     pts_proc.append(pts)
                 contour_merged = np.zeros_like(image)
                 for contour in contour_proc:
-                    contour_merged[contour == 255] = 255
+                    contour_merged[contour == 1] = 1
                 self._stack_pts_segm.append(pts_proc)
                 self._stack_contour_pred.append(contour_merged)
             else:
@@ -148,23 +148,23 @@ class Segmentation:
         return self._stack_contour_pred
 
     @staticmethod
-    def dice_coefficient(gt, pred, k=255):
+    def dice_coefficient(gt, pred, k=1):
         """
         Method to calculate dice coefficient between predicted and groundtruth segmentation
         :param gt: groundtruth
         :param pred: prediction
-        :param k: value of segmentation (default: 255)
+        :param k: value of segmentation (default: 1)
         :return: dice coefficient value between 0 and 1
         """
         return np.sum(pred[gt == k]) * 2.0 / (np.sum(pred) + np.sum(gt))
 
     @staticmethod
-    def volumetric_overlap_error(gt, pred, k=255):
+    def volumetric_overlap_error(gt, pred, k=1):
         """
         Method to calculate volumetric overlap error between predicted and groundtruth segmentation
         :param gt: groundtruth
         :param pred: prediction
-        :param k: value of segmentation (default: 255)
+        :param k: value of segmentation (default: 1)
         :return: volumetric overlap error value between 0 and 1
         """
         return 1 - np.sum(pred[gt == k]) * 2.0 / (np.sum(pred + gt))
@@ -172,9 +172,9 @@ class Segmentation:
     @staticmethod
     def mod_hausdorff_distance(gt, pred):
         """
-        Method to calculate modified hausdorff distance between predcited and groundtruth segmentation
+        Method to calculate modified hausdorff distance between predicted and groundtruth segmentation
         :param gt: groundtruth
-        :param pred: prediciton
+        :param pred: prediction
         :return: modified hausdorff distance
         """
         distance = cdist(gt, pred, 'euclidean')
@@ -182,7 +182,7 @@ class Segmentation:
         dist2 = np.mean(np.min(distance, axis=1))
         return max(dist1, dist2)
 
-    def evaluate_segmentation(self, k=255):
+    def evaluate_segmentation(self, k=1):
         """
         Method to evaluate the stack segmentation
         :return: dice coefficient, volumetric overlap error, modified hausdorff distance

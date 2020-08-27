@@ -208,7 +208,7 @@ class PatientData:
                     first = ind2
                 if ind2 > last:
                     last = ind2
-                cv2.drawContours(contour_img[ind2], [vert[:, 0:2].astype(np.int32)], -1, (255, 255, 255), -1)
+                cv2.drawContours(contour_img[ind2], [vert[:, 0:2].astype(np.int32)], -1, (1, 0, 0), -1)
 
             # scale contour images to size of pre-treatment images
             contour_img_res = [cv2.resize(x, dsize=ct_shape[slice_index], interpolation=cv2.INTER_NEAREST) for
@@ -252,7 +252,8 @@ class PatientData:
         Method to get the contour 2D mask of slice index and given roi name
         :param struct: name of roi of interest
         :param slice_index: index of slice(s), if None entire volume
-        :return: list of contour 2D masks as np.uint16 array with 0 - background, 255 - mask per slice
+        :return: list of contour 2D masks as np.uint16 array with 0 - background, 1
+         - mask per slice
         """
         df = self.contour_list_names_filtered
         struct_ind = df[df['RoiName'] == struct].index.values
