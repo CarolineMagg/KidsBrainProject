@@ -79,11 +79,11 @@ class Segmentation:
         :return:
         """
         if postprocess == -1:
-            self._stack_img = self.patient.get_pre_images()[first:last]
+            self._stack_img = self.patient.get_pre_images()[first:last+1]
         else:
-            self._stack_img = self.patient.get_post_images()[postprocess][first:last]
-        self._stack_contour_init = self.patient.get_contour_overlay(struct)[first:last]
-        self._stack_pts_init = self.patient.get_contour_points(struct)[first:last]
+            self._stack_img = self.patient.get_post_images()[postprocess][first:last+1]
+        self._stack_contour_init = self.patient.get_contour_overlay(struct)[first:last+1]
+        self._stack_pts_init = self.patient.get_contour_points(struct)[first:last+1]
         self._stack_contour_pred = []
         self._tmp_struct = struct
         self._tmp_first = first
