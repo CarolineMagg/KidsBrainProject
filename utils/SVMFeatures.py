@@ -34,10 +34,10 @@ class SVMFeatures:
         self.pred_list = preds
         self.segm_value = k
 
-    def calculate(self):
+    def calculate(self, standardize=True):
         """
         Calculates the independent and dependent features
-        :return: list for independent and dependent features per image
+        :return: dicts for independent and dependent features per image
         """
         indep_features = self.calculate_independent_features()
         dep_features = self.calculate_dependent_features()
@@ -46,7 +46,18 @@ class SVMFeatures:
                 indep_features = indep_features.drop(index=idx)
                 dep_features = dep_features.drop(index=idx)
         assert len(indep_features) == len(dep_features), "SVMFeatures: not same number of independent and dependent features."
+        if standardize:
+            indep_features = self.standardize(indep_features)
+            dep_features = self.standardize(dep_features)
         return indep_features, dep_features
+
+    @staticmethod
+    def standardize(df):
+        for col in df:
+            average = np.mean(df[col])
+            std = np.std(df[col])
+            df[col] = df[col].apply(lambda x: (x - average) / std if std != 0 else x)
+        return df
 
     def calculate_independent_features(self):
         """
@@ -54,7 +65,7 @@ class SVMFeatures:
         * weighted and unweighted geometry features
         * intensity features
         * gradient features
-        :return: list of all features per image
+        :return: dict with all features per image
         """
         # unweighted geometry features
         log.info(" unweighted geometry features")
@@ -68,9 +79,12 @@ class SVMFeatures:
         # gradient features
         log.info(" gradient features")
         gradients = self._calc_gradients(self.img_list, self.pred_list, self.segm_value)
+        # ratio features
+        log.info(" ratio features")
+        ratios = self._calc_ratios(unweigted_geometry, weighted_geometry, gradients)
         # concatenate results
         assert len(unweigted_geometry) == len(weighted_geometry) == len(intensity) == len(gradients)
-        return unweigted_geometry.join([weighted_geometry, intensity, gradients])
+        return unweigted_geometry.join([weighted_geometry, intensity, gradients, ratios])
 
     def calculate_dependent_features(self):
         """
@@ -79,7 +93,7 @@ class SVMFeatures:
         * jaccard distance
         * hausdorff distance
         * average surface error
-        :return: list of all error metrics per image
+        :return: dict with all error metrics per image
         """
         # dice coefficient
         result = pd.DataFrame(index=range(len(self.img_list)), columns=['dice_coeff', 'jaccard_dist', 'hausdorff_dist',
@@ -107,7 +121,7 @@ class SVMFeatures:
         * surface area (number of pixels on segmentation prediction contour)
         :param preds: list of segmentation masks
         :param k: value of segmentation (default: 1)
-        :return: list of 2 unweighted geometry features per prediction
+        :return: dict with 2 unweighted geometry features per prediction
         """
         result = pd.DataFrame(index=range(len(preds)), columns=['volume', 'surface_area'])
         for idx, pred in enumerate(preds):
@@ -152,7 +166,7 @@ class SVMFeatures:
         :param imgs: list of images
         :param preds: list of segmentation masks
         :param k: value of segmentation (default: 1)
-        :return: list of 4 weighted geometry features per image
+        :return: dict with 4 weighted geometry features per image
         """
         assert len(imgs) == len(preds), 'SVMFeatures: images and predictions not the same length.'
         result = pd.DataFrame(index=range(len(imgs)), columns=['weighted_volume', 'weighted_cut',
@@ -187,7 +201,7 @@ class SVMFeatures:
         :param imgs: list of images
         :param preds: list of segmentation masks
         :param k: value of segmentation (default: 1)
-        :return: list of 7 intensity features per image
+        :return: dict with 7 intensity features per image
         """
         assert len(imgs) == len(preds), 'SVMFeatures: images and predictions not the same length.'
         result = pd.DataFrame(index=range(len(imgs)), columns=['mean_intensity', 'median_intensity',
@@ -229,7 +243,7 @@ class SVMFeatures:
         :param imgs: list of images
         :param preds: list of segmentation masks
         :param k: value of segmentation (default: 1)
-        :return: list of 10 gradient features per image
+        :return: dict with 10 gradient features per image
         """
         assert len(imgs) == len(preds), 'SVMFeatures: images and predictions not the same length.'
         result = pd.DataFrame(index=range(len(imgs)), columns=['sum_l1', 'sum_l2',
@@ -267,6 +281,45 @@ class SVMFeatures:
                                std_l1, std_l2,
                                median_l1, min_l1, max_l1,
                                iqr_l1]
+        return result
+
+    def _calc_ratios(self, unweigthed_features, weighted_features, gradients):
+        """
+        Calculates 11 ratio features from previous weighted, unweighted geometry and gradient features
+        * blur index (sum l2 /sum l1)
+        * low-hi weighted cut divided by weighted/unweighted volume
+        * hi-low weighted cut divided by weighted/unweighted volume
+        * low-hi weighted cut divided by weighted/unweighted cut
+        * hi-low weighted cut divided by weighted/unweighted cut
+        * weighted cut divided by unweighted cut
+        * weighted cut divided by volume
+        * unweighted cut divided by volume
+        Note: unweighted cut is surface area
+        :param unweigthed_features: unweighted geometry features
+        :param weighted_features: weighted geoemtry features
+        :param gradients: gradient features
+        :return: dict with 11 ratio features
+        """
+        result = pd.DataFrame(columns=['blur_index_ratio',
+                                       'lh_volume_ratio', 'lh_weighted_volume_ratio',
+                                       'hl_volume_ratio', 'hl_weighted_volume_ratio',
+                                       'lh_weighted_cut_ratio', 'lh_surface_area_ratio',
+                                       'hl_weighted_cut_ratio', 'hl_surface_area_ratio',
+                                       'weighted_cut_unweighted_cut_ratio',
+                                       'weighted_cut_volume_ratio', 'surface_area_volume_ratio'])
+        assert len(unweigthed_features) == len(weighted_features) == len(gradients)
+        result['blur_index_ratio'] = gradients['sum_l2']/gradients['sum_l1']
+        result['lh_volume_ratio'] = weighted_features['lh_weighted_cut']/unweigthed_features['volume']
+        result['lh_weighted_volume_ratio'] = weighted_features['lh_weighted_cut']/weighted_features['weighted_volume']
+        result['hl_volume_ratio'] = weighted_features['hl_weighted_cut'] / unweigthed_features['volume']
+        result['hl_weighted_volume_ratio'] = weighted_features['hl_weighted_cut'] / weighted_features['weighted_volume']
+        result['lh_weighted_cut_ratio'] = weighted_features['lh_weighted_cut']/weighted_features['weighted_cut']
+        result['lh_surface_area_ratio'] = weighted_features['lh_weighted_cut']/unweigthed_features['surface_area']
+        result['hl_weighted_cut_ratio'] = weighted_features['hl_weighted_cut']/weighted_features['weighted_cut']
+        result['hl_surface_area_ratio'] = weighted_features['hl_weighted_cut']/unweigthed_features['surface_area']
+        result['weighted_cut_unweighted_cut_ratio'] = weighted_features['weighted_cut']/unweigthed_features['surface_area']
+        result['weighted_cut_volume_ratio'] = weighted_features['weighted_cut']/unweigthed_features['volume']
+        result['surface_area_volume_ratio'] = unweigthed_features['surface_area']/unweigthed_features['volume']
         return result
 
     @staticmethod
