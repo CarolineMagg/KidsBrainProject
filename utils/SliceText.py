@@ -13,8 +13,8 @@ class SliceText:
         self.sliceTextProp = vtk.vtkTextProperty()
         self.sliceTextProp.SetFontFamilyToCourier()
         self.sliceTextProp.SetFontSize(20)
-        self.sliceTextProp.SetColor(128, 128, 128)
-        #self.sliceTextProp.SetOpacity(1)
+        self.sliceTextProp.SetColor(250, 128, 114)
+        # self.sliceTextProp.SetOpacity(1)
         self.sliceTextProp.SetVerticalJustificationToBottom()
         self.sliceTextProp.SetJustificationToLeft()
 

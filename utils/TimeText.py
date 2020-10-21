@@ -13,7 +13,7 @@ class TimeText:
         self.timeTextProp = vtk.vtkTextProperty()
         self.timeTextProp.SetFontFamilyToCourier()
         self.timeTextProp.SetFontSize(20)
-        self.timeTextProp.SetColor(128, 128, 128)
+        self.timeTextProp.SetColor(250, 128, 114)
         self.timeTextProp.SetOpacity(1)
         self.timeTextProp.SetVerticalJustificationToBottom()
         self.timeTextProp.SetJustificationToLeft()
