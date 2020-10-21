@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 class VTKPipeline:
 
-    def __init__(self, nr_time_steps, path_dir, structure):
+    def __init__(self, nr_time_steps, path_dir, structure, fill=False):
 
         self.window = None
 
@@ -33,11 +33,12 @@ class VTKPipeline:
 
         # Mask and contour actors
         self.bg_color = (1, 1, 1)
+        self.fill_mask = fill
         path_data_mask = [os.path.join(path_dir, x) for x in os.listdir(path_dir) if 't0' in x or 't1' in x]
         for idx, path_mask in enumerate(path_data_mask):
             path_data_mask[idx] = os.path.join(path_mask, structure)
         logging.info('VTKPipeline: Update mask folders to {0}'.format(path_data_mask))
-        vtkConverter = VTKSegmentationMask(path_data_mask, fill=False)
+        vtkConverter = VTKSegmentationMask(path_data_mask, fill=self.fill_mask)
         vtk_mask, vtk_contour = vtkConverter.generate()
         self.bg_color = vtkConverter.bg_color
         current_slice = self.dicom.GetMapper().GetSliceNumber()
@@ -96,7 +97,7 @@ class VTKPipeline:
         for idx, path_mask in enumerate(new_path):
             new_path[idx] = os.path.join(path_mask, structure)
         logging.info('VTKPipeline: Update mask folders to {0}'.format(new_path))
-        vtkConverter = VTKSegmentationMask(new_path, fill=False)
+        vtkConverter = VTKSegmentationMask(new_path, fill=self.fill_mask)
         vtk_mask, vtk_contour = vtkConverter.generate()
         self.bg_color = vtkConverter.bg_color
         current_slice = self.dicom.GetMapper().GetSliceNumber()

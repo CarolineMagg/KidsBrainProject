@@ -26,7 +26,9 @@ class VTKSegmentationMask:
             pngfiles_tmp = sorted(pngfiles_tmp, key=lambda x: int(x.split('slice')[-1].split('.')[0]))
             pngfiles.append(pngfiles_tmp)
         self.png_files = pngfiles
-        self.number_slices = len(pngfiles[0])
+        self.first_idx = int(pngfiles[0][0].split('slice')[-1].split('.')[0])
+        self.last_idx = int(pngfiles[0][-1].split('slice')[-1].split('.')[0])
+        self.number_slices = self.first_idx + self.last_idx - 1
         self.contour_width = contour_width
         self.contour_color = contour_color
         self.bg_color = bg_color
@@ -56,8 +58,14 @@ class VTKSegmentationMask:
     def generate_np_data(self):
         png_reader = vtk.vtkPNGReader()
         for pngfile in self.png_files:
-            np_mask_tmp = []
-            np_contour_tmp = []
+            # init slice per png files
+            png_reader.SetFileName(pngfile[0])
+            png_reader.Update()
+            img_data = png_reader.GetOutput()
+            x, y, z = img_data.GetDimensions()
+            np_mask_tmp = [np.zeros((x, y), dtype=np.int16)] * self.number_slices
+            np_contour_tmp = [np.zeros((x, y), dtype=np.int16)] * self.number_slices
+            # get data for each file
             for i, p in enumerate(pngfile):
                 # read pngs
                 png_reader.SetFileName(p)
@@ -73,7 +81,7 @@ class VTKSegmentationMask:
                 self.y = y
                 # generate mask
                 numpy_data = np.flip(numpy_support.vtk_to_numpy(vtk_data).reshape(x, y))
-                np_mask_tmp.append(numpy_data)
+                np_mask_tmp[i + self.first_idx] = numpy_data
                 # generate contour
                 pts = []
                 tmp = cv2.findContours(numpy_data.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[1]
@@ -84,7 +92,7 @@ class VTKSegmentationMask:
                     vertices = p.astype(np.int32)
                     if len(vertices) != 0:
                         cv2.drawContours(contour, [vertices], -1, (self.contour_color), self.contour_width)
-                np_contour_tmp.append(contour)
+                np_contour_tmp[i + self.first_idx] = contour
             self.np_mask_list.append(np_mask_tmp)
             self.np_contour_list.append(np_contour_tmp)
 
@@ -98,7 +106,7 @@ class VTKSegmentationMask:
                 dist[contour2 != 0] = 0
                 if np.max(dist) != 0:
                     dist = dist / np.max(dist) * 255
-                if jdx == 0 and self.fill:
+                if jdx == 0 and self.fill and self.first_idx <= idx <= self.last_idx:
                     dist[contour1 == 0] = 1
                 np_distance_transform_tmp.append(dist)
             self.np_distance_transform.append(np_distance_transform_tmp)
