@@ -31,5 +31,6 @@ class SliceText:
         message = self.status_message(current_slice, max_slice)
         self.sliceTextMapper.SetInput(message)
 
-    def status_message(self, current_slice, max_slice):
+    @staticmethod
+    def status_message(current_slice, max_slice):
         return "Slice {0} / {1}".format(current_slice, max_slice)

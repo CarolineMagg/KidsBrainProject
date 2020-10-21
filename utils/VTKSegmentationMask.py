@@ -22,7 +22,9 @@ class VTKSegmentationMask:
         self.number_time_steps = len(path_list)
         pngfiles = []
         for path_mask in path_list:
-            pngfiles.append([os.path.join(path_mask, x) for x in os.listdir(path_mask)])
+            pngfiles_tmp = [os.path.join(path_mask, x) for x in os.listdir(path_mask)]
+            pngfiles_tmp = sorted(pngfiles_tmp, key=lambda x: int(x.split('slice')[-1].split('.')[0]))
+            pngfiles.append(pngfiles_tmp)
         self.png_files = pngfiles
         self.number_slices = len(pngfiles[0])
         self.contour_width = contour_width
@@ -104,7 +106,8 @@ class VTKSegmentationMask:
     def generate_vkt_data(self):
         # distance transform segmentation mask
         for idx in range(self.number_time_steps - 1):  # per time step
-            vtk_dt = numpy_support.numpy_to_vtk(np.flip(np.array(self.np_distance_transform[idx]).ravel()))
+            np_tmp = np.flip(np.array([x for x in reversed(self.np_distance_transform[idx])]).ravel())
+            vtk_dt = numpy_support.numpy_to_vtk(np_tmp)
             vtk_imageData = vtk.vtkImageData()
             vtk_imageData.GetPointData().SetScalars(vtk_dt)
             vtk_imageData.SetDimensions((self.x, self.y, self.number_slices))
@@ -115,7 +118,8 @@ class VTKSegmentationMask:
         # contour masks
         for idx in range(self.number_time_steps):
             # contour masks
-            vtk_c = numpy_support.numpy_to_vtk(np.flip(np.array(self.np_contour_list[idx]).ravel()))
+            np_tmp = np.flip(np.array([x for x in reversed(self.np_contour_list[idx])]).ravel())
+            vtk_c = numpy_support.numpy_to_vtk(np_tmp)
             vtk_imageData = vtk.vtkImageData()
             vtk_imageData.GetPointData().SetScalars(vtk_c)
             vtk_imageData.SetDimensions((self.x, self.y, self.number_slices))
