@@ -1,3 +1,6 @@
+########################################################################################################################
+# Class to create the VTKPipeline that combines all actors, renderer, interactor and manipulations of such.
+########################################################################################################################
 import vtk
 import os
 import sys
@@ -9,6 +12,8 @@ from utils.VTKSegmentationActors import VTKSegmentationActors
 from utils.VTKSegmentationMask import VTKSegmentationMask
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+__author__ = "c.magg"
 
 
 class VTKPipeline:
@@ -30,6 +35,7 @@ class VTKPipeline:
         self.dicom.GetMapper().SetSliceNumber(sn)
         self.dicom.GetProperty().SetOpacity(0.5)
         self.dicom.GetMapper().SetInputConnection(self.reader.GetOutputPort())
+        self.dicom.SetPosition(0, 0, 0)
 
         # Mask and contour actors
         self.bg_color = (1, 1, 1)
@@ -89,7 +95,13 @@ class VTKPipeline:
 
     def AddDicomActor(self):
         logging.debug("VTKPipeline: Add png actor.")
+        self.renderer.RemoveViewProp(self.actors_mask)
+        for idx in range(len(self.actors_contour)):
+            self.renderer.RemoveViewProp(self.actors_contour[idx])
         self.renderer.AddViewProp(self.dicom)
+        self.renderer.AddViewProp(self.actors_mask)
+        for idx in range(len(self.actors_contour)):
+            self.renderer.AddActor(self.actors_contour[idx])
         self.window.Render()
 
     def UpdateReader(self, new_path):
