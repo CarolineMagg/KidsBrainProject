@@ -146,8 +146,6 @@ class VTKPipeline:
                         self.dicom.GetMapper().GetSliceNumberMinValue())
         logging.debug('VTKPipeline: Setting new slice {0}'.format(new_slice))
         self.dicom.GetMapper().SetSliceNumber(new_slice)
-        slice_number = self.dicom.GetMapper().GetSliceNumber()
-
         for idx in range(len(self.actors_contour)):
             self.actors_contour[idx].GetMapper().SetSliceNumber(new_slice)
             self.actors_contour[idx].Update()

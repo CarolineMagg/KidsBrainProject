@@ -115,14 +115,14 @@ class VTKSegmentationMask:
                     dist = dist / np.max(dist) * 255
                 if jdx == 0 and self.fill and self.first_idx <= idx <= self.last_idx:
                     dist[contour1 == 0] = 1
-                dist = cv2.equalizeHist(dist.astype(np.uint8))
+                #dist = cv2.equalizeHist(dist.astype(np.uint8))
                 dist2 = cv2.distanceTransform(contour2, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
                 dist2 = 255 - dist2
                 dist2[contour1 != 0] = 255
                 dist2[dist2 == 255] = 0
                 if np.max(dist2) != 0:
                     dist2 = dist2 / np.max(dist2) * 255
-                dist2 = cv2.equalizeHist(dist2.astype(np.uint8))
+                #dist2 = cv2.equalizeHist(dist2.astype(np.uint8))
                 np_distance_transform_tmp.append(dist + dist2)
             self.np_distance_transform.append(np_distance_transform_tmp)
 

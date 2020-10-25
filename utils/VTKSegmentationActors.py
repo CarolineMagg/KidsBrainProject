@@ -51,7 +51,10 @@ class VTKSegmentationActors:
         :return:
         """
         # ColorTransferFunction for color
-        colors = [(1, 0, 0), (0, 1, 0), (0, 1, 1), (0, 0, 1)]
+        # colors = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (0, 1, 1)]
+        colors = [(0.79527559, 0., 0.12598425), (0.96062992, 0.6496063, 0.51181102),
+                  (0.01968504, 0.44488189, 0.69291339), (0.57480315, 0.77559055, 0.87401575)]
+        # colors = [(254, 0, 0), (0, 254, 0), (0, 0, 254), (0, 254, 254)]
         for idx in range(self.number_time_steps - 1):
             ctf01 = vtk.vtkColorTransferFunction()
             ctf01.AddRGBPoint(0, *self.bg_color)
@@ -106,8 +109,8 @@ class VTKSegmentationActors:
         blend.SetOpacity(0, 0.5)  # 0=1st image, 0.5 alpha of 1st image
         blend.SetOpacity(1, 0.5)  # 1=2nd image, 0.5 alpha of 2nd image
         blend.SetBlendModeToCompound()  # images compounded together and each component is scaled by the sum of the alpha/opacity values
-        blend.AddInputConnection(res[1].GetOutputPort())
-        blend.AddInputConnection(res[0].GetOutputPort())
+        for idx in range(len(res)):
+            blend.AddInputConnection(res[idx].GetOutputPort())
 
         actors_mask = vtk.vtkImageSlice()
         actors_mask.SetMapper(vtk.vtkImageSliceMapper())
