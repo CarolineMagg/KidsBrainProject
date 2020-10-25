@@ -34,10 +34,10 @@ class VTKPipeline:
         # Mask and contour actors
         self.bg_color = (1, 1, 1)
         self.fill_mask = fill
-        path_data_mask = [os.path.join(path_dir, x) for x in os.listdir(path_dir) if 't0' in x or 't1' in x]
+        path_data_mask = [os.path.join(path_dir, x) for x in os.listdir(path_dir) if 'init' in x or 't1' in x]
         for idx, path_mask in enumerate(path_data_mask):
             path_data_mask[idx] = os.path.join(path_mask, structure)
-        logging.info('VTKPipeline: Update mask folders to {0}'.format(path_data_mask))
+        logging.debug('VTKPipeline: Update mask folders to {0}'.format(path_data_mask))
         vtkConverter = VTKSegmentationMask(path_data_mask, fill=self.fill_mask)
         vtk_mask, vtk_contour = vtkConverter.generate()
         self.bg_color = vtkConverter.bg_color
@@ -57,11 +57,11 @@ class VTKPipeline:
         self.renderer = vtk.vtkRenderer()
         self.renderer.SetBackground(*self.bg_color)
         self.renderer.ResetCamera()
+
         self.renderer.AddViewProp(self.dicom)
         self.renderer.AddActor2D(self.sliceText.sliceTextActor)
         self.renderer.AddActor2D(self.timeText.timeTextActor)
-        for idx in reversed(range(len(self.actors_mask))):
-            self.renderer.AddViewProp(self.actors_mask[idx])
+        self.renderer.AddViewProp(self.actors_mask)
         for idx in range(len(self.actors_contour)):
             self.renderer.AddActor(self.actors_contour[idx])
 
@@ -74,18 +74,26 @@ class VTKPipeline:
         self.interactorStyle.AddObserver("MouseWheelForwardEvent", self.MoveSliceFoward)
         self.interactorStyle.AddObserver("MouseWheelBackwardEvent", self.MoveSliceBackward)
 
+    def AddActorsToRenderer(self):
+        self.renderer.AddViewProp(self.dicom)
+        self.renderer.AddActor2D(self.sliceText.sliceTextActor)
+        self.renderer.AddActor2D(self.timeText.timeTextActor)
+        self.renderer.AddViewProp(self.actors_mask)
+        for idx in range(len(self.actors_contour)):
+            self.renderer.AddActor(self.actors_contour[idx])
+
     def RemoveDicomActor(self):
-        logging.info("VTKPipeline: Remove png actor.")
+        logging.debug("VTKPipeline: Remove png actor.")
         self.renderer.RemoveViewProp(self.dicom)
         self.window.Render()
 
     def AddDicomActor(self):
-        logging.info("VTKPipeline: Add png actor.")
+        logging.debug("VTKPipeline: Add png actor.")
         self.renderer.AddViewProp(self.dicom)
         self.window.Render()
 
     def UpdateReader(self, new_path):
-        logging.info("VTKPipeline: Update png reader with new first file {0}".format(new_path[0]))
+        logging.debug("VTKPipeline: Update png reader with new first file {0}".format(new_path[0]))
         filePath = vtk.vtkStringArray()
         filePath.SetNumberOfValues(len(new_path))
         for i in range(0, len(new_path), 1):
@@ -93,21 +101,20 @@ class VTKPipeline:
         self.reader.SetFileNames(filePath)
         self.reader.Update()
 
-    def UpdateMask(self, new_path, structure):
+    def UpdateMask(self, new_path, structure, fill_toogle=True):
         for idx, path_mask in enumerate(new_path):
             new_path[idx] = os.path.join(path_mask, structure)
-        logging.info('VTKPipeline: Update mask folders to {0}'.format(new_path))
+        logging.debug('VTKPipeline: Update mask folders to {0}'.format(new_path))
+        self.fill_mask = fill_toogle
         vtkConverter = VTKSegmentationMask(new_path, fill=self.fill_mask)
         vtk_mask, vtk_contour = vtkConverter.generate()
         self.bg_color = vtkConverter.bg_color
         current_slice = self.dicom.GetMapper().GetSliceNumber()
-        for idx in reversed(range(len(self.actors_mask))):
-            self.renderer.RemoveViewProp(self.actors_mask[idx])
+        self.renderer.RemoveViewProp(self.actors_mask)
         for idx in range(len(self.actors_contour)):
             self.renderer.RemoveViewProp(self.actors_contour[idx])
         self.actors_mask, self.actors_contour = self.actorsGenerator.UpdateActors(vtk_mask, vtk_contour, current_slice)
-        for idx in reversed(range(len(self.actors_mask))):
-            self.renderer.AddViewProp(self.actors_mask[idx])
+        self.renderer.AddViewProp(self.actors_mask)
         for idx in range(len(self.actors_contour)):
             self.renderer.AddActor(self.actors_contour[idx])
 
@@ -125,21 +132,20 @@ class VTKPipeline:
     def MoveSlice(self, new_slice):
         new_slice = max(min(self.dicom.GetMapper().GetSliceNumberMaxValue(), new_slice),
                         self.dicom.GetMapper().GetSliceNumberMinValue())
-        logging.info('VTKPipeline: Setting new slice {0}'.format(new_slice))
+        logging.debug('VTKPipeline: Setting new slice {0}'.format(new_slice))
         self.dicom.GetMapper().SetSliceNumber(new_slice)
         slice_number = self.dicom.GetMapper().GetSliceNumber()
 
         for idx in range(len(self.actors_contour)):
             self.actors_contour[idx].GetMapper().SetSliceNumber(new_slice)
             self.actors_contour[idx].Update()
-        for idx in range(len(self.actors_mask)):
-            self.actors_mask[idx].GetMapper().SetSliceNumber(new_slice)
-            self.actors_mask[idx].Update()
+        self.actors_mask.GetMapper().SetSliceNumber(new_slice)
+        self.actors_mask.Update()
 
         self.sliceText.SetInput(new_slice, self.dicom.GetMapper().GetSliceNumberMaxValue())
         self.window.Render()
 
     def SetTimeText(self, new_time_step, max_time_step):
-        logging.info("VTKPipeline: Setting new time step {0}".format(new_time_step))
+        logging.debug("VTKPipeline: Setting new time step {0}".format(new_time_step))
         self.timeText.SetInput(new_time_step, max_time_step)
         self.window.Render()

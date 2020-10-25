@@ -25,7 +25,7 @@ class VTKSegmentationActors:
             self.number_time_steps = None
         else:
             self.set_data(vtk_mask, vtk_contour)
-        self.actors = []
+        self.actors_mask = None
         self.actors_contour = []
 
     def set_data(self, vtk_mask, vtk_contour):
@@ -43,14 +43,14 @@ class VTKSegmentationActors:
         self.generate_lut_contour()
         self.generate_actors_contour()
         self.generate_actors_mask()
-        return self.actors, self.actors_contour
+        return self.actors_mask, self.actors_contour
 
     def generate_lut_mask(self):
         """
         Generate look up table for mask (distance transform)
         :return:
         """
-        # ColorTransferFunction
+        # ColorTransferFunction for color
         colors = [(1, 0, 0), (0, 1, 0), (0, 1, 1), (0, 0, 1)]
         for idx in range(self.number_time_steps - 1):
             ctf01 = vtk.vtkColorTransferFunction()
@@ -58,6 +58,12 @@ class VTKSegmentationActors:
             ctf01.AddRGBPoint(1, *colors[idx])
             ctf01.AddRGBPoint(255, *colors[idx + 1])
             self.ctf.append(ctf01)
+
+        # Piecewise Function for opacity
+        otf = vtk.vtkPiecewiseFunction()
+        otf.AddPoint(0, 0)  # invisible
+        otf.AddPoint(1, 1)  # fully visible
+        otf.AddPoint(255, 1)  # fully visible
 
         # look up table
         for idx in range(self.number_time_steps - 1):
@@ -67,8 +73,7 @@ class VTKSegmentationActors:
             lut01.SetRampToLinear()
             for ii, ss in enumerate([float(xx) for xx in range(tableSize)]):
                 cc = self.ctf[idx].GetColor(ss)
-                # oo = otf.GetValue(ss)
-                oo = 0.7
+                oo = otf.GetValue(ss)
                 lut01.SetTableValue(ii, cc[0], cc[1], cc[2], oo)
                 lut01.Modified()
             lut01.SetRange(0, 255)
@@ -89,20 +94,28 @@ class VTKSegmentationActors:
         self.lut_contour = lut_contour
 
     def generate_actors_mask(self):
-        self.actors = []
+        self.actors_mask = []
+        res = []
         for idx in range(self.number_time_steps - 1):
             scalarValuesToColors = vtk.vtkImageMapToColors()
             scalarValuesToColors.SetLookupTable(self.lut[idx])
             scalarValuesToColors.SetInputData(self.vtk_mask[idx])
-            scalarValuesToColors.GetOutput()
+            res.append(scalarValuesToColors)
 
-            # Create an image actor
-            actor = vtk.vtkImageSlice()
-            actor.SetMapper(vtk.vtkImageSliceMapper())
-            actor.GetMapper().SetSliceNumber(self.slice_number)
-            actor.GetMapper().SetInputConnection(scalarValuesToColors.GetOutputPort())
-            actor.GetProperty().SetOpacity(0.8)
-            self.actors.append(actor)
+        blend = vtk.vtkImageBlend()
+        blend.SetOpacity(0, 0.5)  # 0=1st image, 0.5 alpha of 1st image
+        blend.SetOpacity(1, 0.5)  # 1=2nd image, 0.5 alpha of 2nd image
+        blend.SetBlendModeToCompound()  # images compounded together and each component is scaled by the sum of the alpha/opacity values
+        blend.AddInputConnection(res[1].GetOutputPort())
+        blend.AddInputConnection(res[0].GetOutputPort())
+
+        actors_mask = vtk.vtkImageSlice()
+        actors_mask.SetMapper(vtk.vtkImageSliceMapper())
+        actors_mask.GetMapper().SetSliceNumber(self.slice_number)
+        actors_mask.GetMapper().SetInputConnection(blend.GetOutputPort())
+        actors_mask.GetProperty().SetOpacity(1)
+        actors_mask.SetPosition(0, 1, 0)
+        self.actors_mask = actors_mask
 
     def generate_actors_contour(self):
         self.actors_contour = []
@@ -117,5 +130,5 @@ class VTKSegmentationActors:
             actor.SetMapper(vtk.vtkImageSliceMapper())
             actor.GetMapper().SetSliceNumber(self.slice_number)
             actor.GetMapper().SetInputConnection(scalarValuesToColors.GetOutputPort())
-            actor.GetProperty().SetOpacity(0.8)
+            actor.GetProperty().SetOpacity(1)
             self.actors_contour.append(actor)
