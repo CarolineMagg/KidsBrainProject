@@ -20,8 +20,11 @@ class HelpingWindow(QMainWindow):
 
         info = QLabel(
             "left mouse button - change window level\n" +
-            "right left mouse - positional zoom\n" +
-            "mouse wheele - slice through volume\n")
+            "right left mouse - zoom\n" +
+            "mouse wheel - slice through volume\n" +
+            "shift + left mouse - pan camera\n" +
+            "shift + right mouse - rotate camera plane\n" +
+            "press mouse wheel - pan camera\n")
         info.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(info)
 

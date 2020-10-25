@@ -7,6 +7,7 @@ import os
 import numpy as np
 import vtk
 import cv2
+import logging
 from vtk.util import numpy_support
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -29,6 +30,9 @@ class VTKSegmentationMask:
         self.first_idx = int(pngfiles[0][0].split('slice')[-1].split('.')[0])
         self.last_idx = int(pngfiles[0][-1].split('slice')[-1].split('.')[0])
         self.number_slices = self.first_idx + self.last_idx + 1
+        logging.debug("VTKSegmentationMask: first index {0}, last index {1}, total number {2}".format(self.first_idx,
+                                                                                                      self.last_idx,
+                                                                                                      self.number_slices))
         self.contour_width = contour_width
         self.contour_color = contour_color
         self.bg_color = bg_color
