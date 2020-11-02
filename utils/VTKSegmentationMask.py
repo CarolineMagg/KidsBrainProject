@@ -9,15 +9,19 @@ import vtk
 import cv2
 import logging
 from vtk.util import numpy_support
+import matplotlib.pyplot as plt
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from SVRPrediction import SVRPrediction
 
 __author__ = "c.magg"
 
 
 class VTKSegmentationMask:
 
-    def __init__(self, path_list, contour_width=1, contour_color=255, bg_color=(1, 1, 1), fill=True):
+    def __init__(self, path_list, path_img_list, structure, contour_width=1, contour_color=255,
+                 bg_color=(1, 1, 1), fill=True, accuracy=False):
         pass
         self.path_list = path_list
         self.number_time_steps = len(path_list)
@@ -27,9 +31,11 @@ class VTKSegmentationMask:
             pngfiles_tmp = sorted(pngfiles_tmp, key=lambda x: int(x.split('slice')[-1].split('.')[0]))
             pngfiles.append(pngfiles_tmp)
         self.png_files = pngfiles
+        self.path_img_list = path_img_list
         self.first_idx = int(pngfiles[0][0].split('slice')[-1].split('.')[0])
         self.last_idx = int(pngfiles[0][-1].split('slice')[-1].split('.')[0])
         self.number_slices = self.first_idx + self.last_idx + 1
+        self.structure = structure
         logging.debug("VTKSegmentationMask: first index {0}, last index {1}, total number {2}".format(self.first_idx,
                                                                                                       self.last_idx,
                                                                                                       self.number_slices))
@@ -37,12 +43,15 @@ class VTKSegmentationMask:
         self.contour_color = contour_color
         self.bg_color = bg_color
         self.fill = fill
+        self.accuracy = accuracy
 
         self.np_mask_list = []
         self.np_contour_list = []
         self.np_distance_transform = []
         self.vtk_distance = []
         self.vtk_contour = []
+        self.np_img_list = []
+        self.predictions = []
 
         self.x = None
         self.y = None
@@ -53,11 +62,20 @@ class VTKSegmentationMask:
         self.np_distance_transform = []
         self.vtk_distance = []
         self.vtk_contour = []
+        self.np_img_list = []
+        self.predictions = []
 
         self.generate_np_data()
         self.generate_distance_transform()
         self.generate_vkt_data()
-        return self.vtk_distance, self.vtk_contour
+        if self.accuracy:
+            self.generate_image_data()
+            self.generate_predictions()
+        return self.vtk_distance, self.vtk_contour #, self.predictions
+
+    def generate_image_data(self):
+        for idx, pngfile in enumerate(self.path_img_list):
+            self.np_img_list.append(cv2.imread(pngfile, cv2.IMREAD_GRAYSCALE))
 
     def generate_np_data(self):
         png_reader = vtk.vtkPNGReader()
@@ -85,6 +103,8 @@ class VTKSegmentationMask:
                 self.y = y
                 # generate mask
                 numpy_data = np.flip(numpy_support.vtk_to_numpy(vtk_data).reshape(x, y))
+                if np.max(numpy_data) == 1:
+                    numpy_data[numpy_data == 1] = 255
                 np_mask_tmp[i + self.first_idx] = numpy_data
                 # generate contour
                 pts = []
@@ -115,14 +135,14 @@ class VTKSegmentationMask:
                     dist = dist / np.max(dist) * 255
                 if jdx == 0 and self.fill and self.first_idx <= idx <= self.last_idx:
                     dist[contour1 == 0] = 1
-                #dist = cv2.equalizeHist(dist.astype(np.uint8))
+                dist = cv2.equalizeHist(dist.astype(np.uint8))
                 dist2 = cv2.distanceTransform(contour2, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
                 dist2 = 255 - dist2
                 dist2[contour1 != 0] = 255
                 dist2[dist2 == 255] = 0
                 if np.max(dist2) != 0:
                     dist2 = dist2 / np.max(dist2) * 255
-                #dist2 = cv2.equalizeHist(dist2.astype(np.uint8))
+                dist2 = cv2.equalizeHist(dist2.astype(np.uint8))
                 np_distance_transform_tmp.append(dist + dist2)
             self.np_distance_transform.append(np_distance_transform_tmp)
 
@@ -149,3 +169,22 @@ class VTKSegmentationMask:
             vtk_imageData.SetSpacing(1.0, 1.0, 1.0)
             vtk_imageData.SetOrigin(0.0, 0.0, 0.0)
             self.vtk_contour.append(vtk_imageData)
+
+    def generate_predictions(self):
+        """
+        Method to create features of segmentation masks wrt to image
+        :return:
+        """
+        # prediction of accuracy for each time step
+        predictor = SVRPrediction()
+        for idx in range(self.number_time_steps):
+            pred_step = []
+            for i in range(self.first_idx, self.last_idx+1):
+                pred_step.append(predictor.make_prediction(self.np_img_list[i],
+                                                           self.np_mask_list[idx][i],
+                                                           self.structure))
+            self.predictions.append(np.mean(pred_step))
+
+
+
+

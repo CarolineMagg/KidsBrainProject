@@ -10,7 +10,6 @@ import numpy as np
 from sklearn import svm
 from sklearn.model_selection import KFold
 from sklearn.multioutput import MultiOutputRegressor
-import random
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 

@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
         self.vtkWidget = QVTKRenderWindowInteractor(self.frame)
         self.layout.addWidget(self.vtkWidget)
 
-        self.path_dir = "../../Data/Test/Segmentation/"
+        self.path_dir = "../../Data/Test1/Segmentation/"
         self.structure = 'Brain'
         self.time_steps = [x for x in os.listdir(self.path_dir) if 'png' in x]
         self.nr_time_steps = len(self.time_steps) - 1
@@ -110,11 +110,19 @@ class MainWindow(QMainWindow):
         self.toolbar.addSeparator()
 
         self.cb = QComboBox()
-        items = os.listdir(os.path.join(self.path_dir, 't0'))
+        items = os.listdir(os.path.join(self.path_dir, 'init'))
         logging.debug('MainWindow: Available structures {0}'.format(items))
         self.cb.addItems(items)
         self.cb.currentIndexChanged.connect(self.selectStructure)
         self.toolbar.addWidget(self.cb)
+
+        self.toolbar.addSeparator()
+
+        self.colormap = QComboBox()
+        items = ['RGBO', 'Plasma', 'Viridis']
+        self.colormap.addItems(items)
+        self.colormap.currentIndexChanged.connect(self.selectColorMap)
+        self.toolbar.addWidget(self.colormap)
 
         self.toolbar.addSeparator()
 
@@ -134,17 +142,25 @@ class MainWindow(QMainWindow):
             logging.debug('MainWindow: background')
             self.vtkPipeline.AddDicomActor()
 
+    def selectColorMap(self, s):
+        path_data_mask = [os.path.join(self.path_dir, x) for x in os.listdir(self.path_dir) if
+                          'init' in x or 't1' in x]
+        items = ['rgbo', 'plasma', 'viridis']
+        self.vtkPipeline.UpdateColorMap(items[s])
+        self.vtkPipeline.UpdateMask(path_data_mask, self.structure)
+        logging.debug('MainWindow: colormap {0}'.format(items[s]))
+
     def fillMaskToggleChange(self, s):
         if s == 0:
             logging.debug("MainWindow: not fill mask")
             path_data_mask = [os.path.join(self.path_dir, x) for x in os.listdir(self.path_dir) if
-                              't0' in x or 't1' in x]
-            self.vtkPipeline.UpdateMask(path_data_mask, self.structure, False)
+                              'init' in x or 't1' in x]
+            self.vtkPipeline.UpdateMask(path_data_mask, self.structure, fill_toogle=False)
         elif s == 2:
             logging.debug("MainWindow: fill mask")
             path_data_mask = [os.path.join(self.path_dir, x) for x in os.listdir(self.path_dir) if
-                              't0' in x or 't1' in x]
-            self.vtkPipeline.UpdateMask(path_data_mask, self.structure, True)
+                              'init' in x or 't1' in x]
+            self.vtkPipeline.UpdateMask(path_data_mask, self.structure, fill_toogle=True)
 
     def selectStructure(self, s):
         logging.debug("MainWindow: Change structure to {0}".format(s))
@@ -161,6 +177,7 @@ class MainWindow(QMainWindow):
             logging.debug('MainWindow: Open folder {0}'.format(self.path_dir))
             self.vtkPipeline.MoveSlice(0)
             self.changeReader()
+            self.vtkPipeline.UpdateColorMap('rgbo')
             self.changeMask()
             self.createSliderToolbar(init_value=self.slider.value())
             self.vtkPipeline.MoveSlice(0)
@@ -181,7 +198,7 @@ class MainWindow(QMainWindow):
 
     def changeMask(self):
         # segmentation files
-        path_data_mask = [os.path.join(self.path_dir, x) for x in os.listdir(self.path_dir) if 't0' in x or 't1' in x]
+        path_data_mask = [os.path.join(self.path_dir, x) for x in os.listdir(self.path_dir) if 'init' in x or 't1' in x]
         self.vtkPipeline.UpdateMask(path_data_mask, self.structure)
         logging.debug('MainWindow: Change mask folder {0}'.format(path_data_mask))
 

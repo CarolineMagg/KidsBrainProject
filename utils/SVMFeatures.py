@@ -21,7 +21,7 @@ class SVMFeatures:
     dependent (error metrics) features for training a SVM with images, groundtruth and predicted segmentation masks.
     """
 
-    def __init__(self, imgs, gts, preds, k=1):
+    def __init__(self, imgs, gts=None, preds=None, k=1):
         """
         Constructor
         :param imgs: list of images
@@ -40,12 +40,17 @@ class SVMFeatures:
         :return: dicts for independent and dependent features per image
         """
         indep_features = self.calculate_independent_features()
-        dep_features = self.calculate_dependent_features()
+        dep_features = None
+        if self.gt_list is not None:
+            dep_features = self.calculate_dependent_features()
         for idx in range(len(indep_features)):
             if np.isnan(np.sum(np.array(indep_features.loc[idx]))):  # if one feature couldn't be calculated, remove row
                 indep_features = indep_features.drop(index=idx)
-                dep_features = dep_features.drop(index=idx)
-        assert len(indep_features) == len(dep_features), "SVMFeatures: not same number of independent and dependent features."
+                if dep_features is not None:
+                    dep_features = dep_features.drop(index=idx)
+        if dep_features is not None:
+            assert len(indep_features) == len(dep_features), \
+                "SVMFeatures: not same number of independent and dependent features."
         if standardize:
             indep_features = self.standardize(indep_features)
             dep_features = self.standardize(dep_features)
@@ -53,6 +58,8 @@ class SVMFeatures:
 
     @staticmethod
     def standardize(df):
+        if df is None:
+            return None
         for col in df:
             average = np.mean(df[col])
             std = np.std(df[col])
@@ -130,8 +137,11 @@ class SVMFeatures:
             # volume
             volume = np.sum(pred == k)
             # surface area
-            im3, contours, hierarchy = cv2.findContours(pred.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-            processed = cv2.drawContours(np.zeros_like(im3), contours, -1, k, 1)
+            if int(cv2.__version__.split('.')[0]) == 3:
+                im3, contours, hierarchy = cv2.findContours(pred.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+            else:
+                contours, hierarchy = cv2.findContours(pred.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+            processed = cv2.drawContours(np.zeros_like(pred), contours, -1, k, 1)
             surface_area = np.sum(processed == k)
             # total curvature
             #mean_curvature = np.sum(SVMFeatures._calc_curvature(pred, k))
@@ -178,11 +188,11 @@ class SVMFeatures:
             # weighted volume
             weighted_volume = SVMFeatures.calc_weighted_volume(img, pred, M)
             # weighted cut
-            weighted_cut = SVMFeatures.calc_weighted_cut(img, pred, M)
+            weighted_cut = SVMFeatures.calc_weighted_cut(img, pred, M, k)
             # low-hi weighted cut
-            lh_weighted_cut = SVMFeatures.calc_low_hi_weighted_cut(img, pred, M)
+            lh_weighted_cut = SVMFeatures.calc_low_hi_weighted_cut(img, pred, M, k)
             # hi-low weighted cut
-            hl_weighted_cut = SVMFeatures.calc_hi_low_weighted_cut(img, pred, M)
+            hl_weighted_cut = SVMFeatures.calc_hi_low_weighted_cut(img, pred, M, k)
             # weighted curvature
             #weighted_curvature = SVMFeatures.calc_weighted_curvature(img, pred, M, k)
             # result
@@ -423,7 +433,7 @@ class SVMFeatures:
         return weighted_volume
 
     @staticmethod
-    def calc_weighted_cut(img, segm, M):
+    def calc_weighted_cut(img, segm, M, k = 1):
         """
         Calculates weighted cut (=sum over all edge weights along boundary of segmentation)
         :param img: list of images
@@ -434,7 +444,7 @@ class SVMFeatures:
         weighted_cut = 0
         for i in range(img.shape[0]):
             for j in range(img.shape[1]):
-                if segm[i, j] == 1:  # voxel inside segmentation & on boundary
+                if segm[i, j] == k:  # voxel inside segmentation & on boundary
                     idx1 = max(0, i - 1)
                     idx2 = min(img.shape[0], i + 2)
                     idx3 = max(0, j - 1)
@@ -467,7 +477,7 @@ class SVMFeatures:
         weighted_cut = 0
         for i in range(img.shape[0]):
             for j in range(img.shape[1]):
-                if segm[i, j] == 1:  # voxel inside segmentation & on boundary
+                if segm[i, j] == k:  # voxel inside segmentation & on boundary
                     idx1 = max(0, i - 1)
                     idx2 = min(img.shape[0], i + 2)
                     idx3 = max(0, j - 1)
@@ -487,7 +497,7 @@ class SVMFeatures:
         return weighted_cut
 
     @staticmethod
-    def calc_low_hi_weighted_cut(img, segm, M):
+    def calc_low_hi_weighted_cut(img, segm, M, k=1):
         """
         Calculates weighted cut of outgoing edges (=sum of all outgoing edge weights along boundary of segmentation)
         :param img: image
@@ -498,7 +508,7 @@ class SVMFeatures:
         weighted_cut = 0
         for i in range(img.shape[0]):
             for j in range(img.shape[1]):
-                if segm[i, j] == 1:  # voxel inside segmentation & on boundary
+                if segm[i, j] == k:  # voxel inside segmentation & on boundary
                     idx1 = max(0, i - 1)
                     idx2 = min(img.shape[0], i + 2)
                     idx3 = max(0, j - 1)
@@ -517,7 +527,7 @@ class SVMFeatures:
         return weighted_cut
 
     @staticmethod
-    def calc_hi_low_weighted_cut(img, segm, M):
+    def calc_hi_low_weighted_cut(img, segm, M, k=1):
         """
         Calculates weighted cut of incoming edges (=sum of all incoming edge weights along boundary of segmentation)
         :param img: image
@@ -528,7 +538,7 @@ class SVMFeatures:
         weighted_cut = 0
         for i in range(img.shape[0]):
             for j in range(img.shape[1]):
-                if segm[i, j] == 1:  # voxel inside segmentation & on boundary
+                if segm[i, j] == k:  # voxel inside segmentation & on boundary
                     idx1 = max(0, i - 1)
                     idx2 = min(img.shape[0], i + 2)
                     idx3 = max(0, j - 1)

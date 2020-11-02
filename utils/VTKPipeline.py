@@ -18,7 +18,7 @@ __author__ = "c.magg"
 
 class VTKPipeline:
 
-    def __init__(self, nr_time_steps, path_dir, structure, fill=False):
+    def __init__(self, nr_time_steps, path_dir, structure, fill=False, color_map='rgbo'):
 
         self.window = None
 
@@ -27,6 +27,7 @@ class VTKPipeline:
         path_png_dir = os.path.join(path_dir, 'png')
         path_png_files = [os.path.join(path_png_dir, x) for x in os.listdir(path_png_dir)]
         path_png_files = sorted(path_png_files, key=lambda x: int(x.split('slice')[-1].split('.')[0]))
+        self.path_png_files = None
         self.UpdateReader(path_png_files)
 
         sn = 10
@@ -40,16 +41,20 @@ class VTKPipeline:
         # Mask and contour actors
         self.bg_color = (1, 1, 1)
         self.fill_mask = fill
+        self.color_map = color_map
         path_data_mask = [os.path.join(path_dir, x) for x in os.listdir(path_dir) if 'init' in x or 't1' in x]
         for idx, path_mask in enumerate(path_data_mask):
             path_data_mask[idx] = os.path.join(path_mask, structure)
         logging.debug('VTKPipeline: Update mask folders to {0}'.format(path_data_mask))
-        vtkConverter = VTKSegmentationMask(path_data_mask, fill=self.fill_mask)
+        vtkConverter = VTKSegmentationMask(path_data_mask, self.path_png_files, structure, fill=self.fill_mask,
+                                           accuracy=False)
         vtk_mask, vtk_contour = vtkConverter.generate()
         self.bg_color = vtkConverter.bg_color
+        self.accuracy = [1, 0.7, 0.5, 0.9]
         current_slice = self.dicom.GetMapper().GetSliceNumber()
-        self.actorsGenerator = VTKSegmentationActors()
-        self.actors_mask, self.actors_contour = self.actorsGenerator.UpdateActors(vtk_mask, vtk_contour, current_slice)
+        self.actorsGenerator = VTKSegmentationActors(color_map=self.color_map)
+        self.actors_mask, self.actors_contour = self.actorsGenerator.UpdateActors(vtk_mask, vtk_contour, current_slice,
+                                                                                  self.accuracy)
 
         # Slice status message
         slice_number = self.dicom.GetMapper().GetSliceNumber()
@@ -105,6 +110,7 @@ class VTKPipeline:
         self.window.Render()
 
     def UpdateReader(self, new_path):
+        self.path_png_files = new_path
         logging.debug("VTKPipeline: Update png reader with new first file {0}".format(new_path[0]))
         filePath = vtk.vtkStringArray()
         filePath.SetNumberOfValues(len(new_path))
@@ -113,22 +119,38 @@ class VTKPipeline:
         self.reader.SetFileNames(filePath)
         self.reader.Update()
 
-    def UpdateMask(self, new_path, structure, fill_toogle=True):
+    def UpdateColorMap(self, color_map):
+        self.color_map = color_map
+        self.actorsGenerator.UpdateColorMap(color_map)
+
+    def UpdateMask(self, new_path, structure, fill_toogle=None):
         for idx, path_mask in enumerate(new_path):
             new_path[idx] = os.path.join(path_mask, structure)
-        logging.debug('VTKPipeline: Update mask folders to {0}'.format(new_path))
-        self.fill_mask = fill_toogle
-        vtkConverter = VTKSegmentationMask(new_path, fill=self.fill_mask)
+        if fill_toogle is not None:
+            self.fill_mask = fill_toogle
+        if 'Test1' in new_path:
+            self.accuracy = None#[1, 0.7, 0.5, 0.9]
+        elif 'Test2/Segmentation/init/Brain' in new_path[0]:
+            self.accuracy = None#[1, 0.2, 0.95]  # [1, 0.2, 0.95]
+        else:
+            self.accuracy = None
+        logging.debug('VTKPipeline: Update mask folders to {0} with fill mask {1} and colormap {2}'.format(new_path,
+                                                                                                      self.fill_mask,
+                                                                                                      self.color_map))
+        vtkConverter = VTKSegmentationMask(new_path, self.path_png_files, structure=structure, fill=self.fill_mask)
         vtk_mask, vtk_contour = vtkConverter.generate()
         self.bg_color = vtkConverter.bg_color
         current_slice = self.dicom.GetMapper().GetSliceNumber()
         self.renderer.RemoveViewProp(self.actors_mask)
         for idx in range(len(self.actors_contour)):
             self.renderer.RemoveViewProp(self.actors_contour[idx])
-        self.actors_mask, self.actors_contour = self.actorsGenerator.UpdateActors(vtk_mask, vtk_contour, current_slice)
+        self.actorsGenerator = VTKSegmentationActors(color_map=self.color_map)
+        self.actors_mask, self.actors_contour = self.actorsGenerator.UpdateActors(vtk_mask, vtk_contour, current_slice,
+                                                                                  self.accuracy)
         self.renderer.AddViewProp(self.actors_mask)
         for idx in range(len(self.actors_contour)):
             self.renderer.AddActor(self.actors_contour[idx])
+        self.window.Render()
 
     def SetWindow(self, window):
         self.window = window
